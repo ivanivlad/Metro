@@ -8,31 +8,28 @@ import java.util.Map;
 public class Runner {
     public static void main(String[] args) throws BadTrackException {
         Metro permMetro = init();
+        System.out.println(permMetro);
 
-        permMetro.buyTicketOnStation(
+        permMetro.getStation(LineColor.RED, "Спортивная").buyOneWayTicket(
                 LocalDate.of(2023, 1, 1),
-                "Спортивная",
                 "Спортивная",
                 "Медведковская");
-        permMetro.buyTicketOnStation(
+        permMetro.getStation(LineColor.RED, "Молодежная").buyOneWayTicket(
                 LocalDate.of(2023, 1, 1),
-                "Спортивная",
                 "Спортивная",
                 "Молодежная");
 
-        permMetro.buyPassOnStation(
-                LocalDate.of(2023, 1, 2),
-                "Молодежная");
-        permMetro.buyPassOnStation(
-                LocalDate.of(2023, 1, 3),
-                "Медведковская");
+        permMetro.getStation(LineColor.RED, "Молодежная")
+                .buyMonthTravelPass(
+                        LocalDate.of(2023, 1, 2));
+        permMetro.getStation(LineColor.RED, "Медведковская")
+                .buyMonthTravelPass(LocalDate.of(2023, 1, 3));
 
         System.out.println(permMetro.checkPassValidity("a0001"));
 
-        permMetro.renewPassOnStation(
-                LocalDate.of(2023, 1, 3),
+        permMetro.getStation(LineColor.RED, "Спортивная").renewTravelPass(
                 "a0001",
-                "Спортивная");
+                LocalDate.of(2023, 1, 3));
 
         permMetro.printTotalIncome();
     }

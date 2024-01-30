@@ -4,22 +4,21 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.TreeMap;
 
 public class Metro {
+    public static final int MAX_PASS_COUNT = 10000;
     private final String cityName;
-    private final List<MetroLine> lines;
+    private final Set<MetroLine> lines = new HashSet<>();
     private final Map<String, LocalDate> travelPass = new HashMap<>();
     private int travelPassCount = 0;
 
     public Metro(String cityName) {
         this.cityName = cityName;
-        this.lines = new ArrayList<>();
     }
 
     public void addLine(LineColor colorLine) {
@@ -29,32 +28,32 @@ public class Metro {
     }
 
     public void addFirstStation(LineColor colorLine, String stationName) {
-        addFirstStation(colorLine, stationName, null);
+        addFirstStation(colorLine, stationName, Map.of());
     }
 
     public void addFirstStation(LineColor colorLine, String stationName,
                                 Map<LineColor, String> changeStation) {
         MetroLine currentLine = getLineByColor(colorLine);
         checkStationExists(stationName);
-        checkFirstStationExists(stationName, currentLine);
+        currentLine.checkFirstStationExists();
         currentLine.addFirstStation(stationName, changeStation);
     }
 
     public void addLastStation(LineColor colorLine, String stationName, Duration timeDuration) {
-        addLastStation(colorLine, stationName, timeDuration, null);
+        addLastStation(colorLine, stationName, timeDuration, Map.of());
     }
 
     public void addLastStation(LineColor colorLine, String stationName, Duration timeDuration,
                                Map<LineColor, String> changeStation) {
         MetroLine currentLine = getLineByColor(colorLine);
+        Station previousStation = currentLine.getLastStation();
         checkStationExists(stationName);
-        Station previousStation = getLastStation(currentLine);
         checkHasNotNextStation(previousStation);
         checkTimeDuration(stationName, timeDuration);
         currentLine.addLastStation(stationName, timeDuration, previousStation, changeStation);
     }
 
-    private static void checkHasNotNextStation(Station station) {
+    private void checkHasNotNextStation(Station station) {
         if (station.getNextStation() != null) {
             throw new RuntimeException(
                     String.format("Станция %s уже имеет следующую", station));
@@ -64,32 +63,26 @@ public class Metro {
     private void checkTimeDuration(String stationName, Duration timeDuration) {
         if (timeDuration.isZero() || timeDuration.isNegative()) {
             throw new RuntimeException(
-                    String.format("Время до предыдущей станции должно быть больше 0 для %s", stationName));
+                    String.format("Время до предыдущей станции должно быть больше 0 для %s",
+                            stationName));
         }
     }
 
     private void checkLineExists(LineColor color) {
-        if (lines.stream()
-                .anyMatch((e) -> e.getColor() == color)) {
+        boolean lineExists = lines.stream()
+                .anyMatch((e) -> e.getColor() == color);
+        if (lineExists) {
             throw new RuntimeException(
                     String.format("Линия с цветом %s уже существует", color));
         }
     }
 
     private void checkStationExists(String stationName) {
-        try {
-            getStation(stationName);
-        } catch (NoSuchElementException e) {
-            return;
-        }
-        throw new RuntimeException(
-                String.format("Станция с именем %s уже существует", stationName));
-    }
-
-    private void checkFirstStationExists(String stationName, MetroLine currentLine) {
-        if (!currentLine.isEmpty()) {
+        boolean isStationExists = lines.stream()
+                .anyMatch(e -> e.getStation(stationName).isPresent());
+        if (isStationExists) {
             throw new RuntimeException(
-                    String.format("У линии %s уже есть первая станция", stationName));
+                    String.format("Станция с именем %s уже существует", stationName));
         }
     }
 
@@ -102,31 +95,12 @@ public class Metro {
                                 String.format("Линии с цветом %s не существует", color)));
     }
 
-    private Station getStation(String stationName) throws NoSuchElementException {
-        return lines.stream().flatMap(metroLine -> metroLine.getStations().stream())
-                .filter((e) -> e.getName().equalsIgnoreCase(stationName))
-                .findFirst().orElseThrow(() -> new NoSuchElementException(
-                        String.format("Станция с именем %s не существует", stationName)));
+    public Station getStation(LineColor lineColor, String stationName) {
+        MetroLine lineByColor = getLineByColor(lineColor);
+        return lineByColor.getStation(stationName).orElseThrow();
     }
 
-    private Station getLastStation(MetroLine line) {
-        List<Station> stations = line.getStations();
-        if (stations.isEmpty()) {
-            throw new RuntimeException(
-                    String.format("На линии '%s' отсутствут станции", line));
-        }
-        return stations.get(stations.size() - 1);
-    }
 
-    private Station findChangeStation(MetroLine startLine, MetroLine endLine) {
-        return startLine.getStations().stream()
-                .filter((e) -> e.hasChangeByLine(endLine))
-                .findFirst().orElseThrow(() ->
-                        new RuntimeException(
-                                String.format("Между станциями %s и %s нет пересадок",
-                                        startLine,
-                                        endLine)));
-    }
 
     private int countOfStageDirect(Station startStation, Station endStation) {
         return countOfStage(startStation, endStation, true);
@@ -156,7 +130,7 @@ public class Metro {
     }
 
     private int countOfStageOnLine(Station startStation,
-                                   Station endStation) throws BadTrackException {
+                                   Station endStation) {
         int count = countOfStageDirect(startStation, endStation);
 
         if (count >= 0) {
@@ -169,24 +143,22 @@ public class Metro {
 
         if (count >= 0) {
             return count;
-        } else {
-            throw new BadTrackException(
+        }
+        throw new BadTrackException(
                     startStation.getName(),
                     endStation.getName());
-        }
     }
 
     public int countOfStationBetween(Station startStation,
-                                     Station endStation) throws BadTrackException {
+                                     Station endStation) {
         MetroLine startLine = startStation.getLine();
         MetroLine endLine = endStation.getLine();
         if (startLine == endLine) {
             return countOfStageOnLine(startStation, endStation);
         }
-        Station changeStationOnLine = findChangeStation(startLine, endLine);
+        Station changeStationOnLine = startLine.findChangeStation(endLine);
         int firstPart = countOfStageOnLine(startStation, changeStationOnLine);
-        String nameChangeStation = changeStationOnLine.getNameChangeStation(endLine);
-        Station stationOnChaneLine = getStation(nameChangeStation);
+        Station stationOnChaneLine = endLine.findChangeStation(startLine);
         int secPart = countOfStageOnLine(stationOnChaneLine, endStation);
         return firstPart + secPart;
     }
@@ -199,65 +171,47 @@ public class Metro {
                 + '}';
     }
 
-    public void buyTicketOnStation(LocalDate dateSale, String sellerName, String startStationName,
-                                   String endStationName) {
-        Station startStation = getStation(startStationName);
-        Station endStation = getStation(endStationName);
-        Station stationSeller = getStation(sellerName);
-        if (startStation == endStation) {
-            throw new RuntimeException("станция назначения равна станции отправления");
-        }
-        stationSeller.buyOneWayTicket(dateSale, startStation, endStation);
-    }
-
-    public void buyPassOnStation(LocalDate dateSale, String sellerName) {
-        Station stationSeller = getStation(sellerName);
-        if (stationSeller == null) {
-            throw new RuntimeException("нет станции: " + sellerName);
-        }
+    public void addMonthTravelPass(LocalDate dateSale) {
         String newSerialNumber = generateTravelPassNumber();
-        stationSeller.buyMonthTravelPass(dateSale);
         travelPass.put(newSerialNumber, dateSale);
     }
 
     private String generateTravelPassNumber() {
         travelPassCount++;
-        if (travelPassCount == 1000) {
+        if (travelPassCount == MAX_PASS_COUNT) {
             throw new RuntimeException("Превышено число возможных номеров");
         }
         return String. format("%s%04d", "a", travelPassCount);
     }
 
-    public void renewPassOnStation(LocalDate dateSale, String passNumber, String sellerName) {
-        if (!travelPass.containsKey(passNumber)) {
-            throw new RuntimeException(String.format("Абонемент %s не найден", passNumber));
-        }
-        Station stationSeller = getStation(sellerName);
-        LocalDate newDateSale = stationSeller.renewTravelPass(dateSale);
+    public void renewMonthTravelPass(String passNumber, LocalDate saleDate) {
+        checkPassExists(passNumber);
+        LocalDate newDateSale = saleDate.plusMonths(1);
         travelPass.put(passNumber, newDateSale);
     }
 
     public boolean checkPassValidity(String passNumber) {
-        if (passNumber == null) {
-            throw new RuntimeException();
-        }
+        checkPassExists(passNumber);
+        LocalDate dateOfExpire = travelPass.get(passNumber);
+        return dateOfExpire.compareTo(LocalDate.now()) > 0;
+    }
+
+    private void checkPassExists(String passNumber) {
         if (!travelPass.containsKey(passNumber)) {
             throw new RuntimeException(String.format("Абонемент %s не найден", passNumber));
         }
-        LocalDate dateOfExpire = travelPass.get(passNumber);
-        return dateOfExpire.compareTo(LocalDate.now()) > 0;
     }
 
     public void printTotalIncome() {
         TreeMap<LocalDate, BigDecimal> totalIncome = new TreeMap<>();
 
         lines.stream().flatMap(metroLine -> metroLine.getStations().stream())
-                    .forEach(station -> station.getTicketOffice().forEach((key, value) ->
-                                totalIncome.compute(key, (k, v) ->
+                    .forEach(station -> station.getTicketOffice()
+                            .getAllSales()
+                            .forEach((key, value) -> totalIncome.compute(key, (k, v) ->
                                         v == null ? value : v.add(value))));
         DateTimeFormatter pattern = DateTimeFormatter.ofPattern("dd.MM.yyyy");
         totalIncome.forEach((key, value) ->
                 System.out.printf("%s - %s\n", key.format(pattern), value));
     }
-
 }

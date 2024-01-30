@@ -1,41 +1,34 @@
 package metro;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
 public class Station {
-    public static final BigDecimal ONE_STAGE_PRICE = new BigDecimal(5);
-    public static final BigDecimal BASE_TICKET_PRICE = new BigDecimal(20);
-    public static final BigDecimal PASS_PRICE = new BigDecimal(3000);
     private final String name;
     private final MetroLine line;
     private Station nextStation;
     private Station previousStation;
     private Duration timeDuration;
-    private Map<LineColor, String> changeLines;
-    private final Map<LocalDate, BigDecimal> ticketOffice = new HashMap<>();
+
+    private final HashMap<LineColor, String> changeStationNames = new HashMap<>();
+    private final TicketOffice ticketOffice = new TicketOffice();
 
     public Station(String name, MetroLine line) {
         this.name = name;
         this.line = line;
     }
 
-    public Station(String name, MetroLine line, Map<LineColor, String> changeStation) {
+    public Station(String name, MetroLine line, Map<LineColor, String> changeStationNames) {
         this(name, line);
-        if (changeStation != null) {
-            this.changeLines = new HashMap<>();
-            this.changeLines.putAll(changeStation);
-        }
+        this.changeStationNames.putAll(changeStationNames);
     }
 
-    public Station(String name, MetroLine line, Duration prevTimeDuration,
-                   Station previousStation, Map<LineColor, String> changeStation) {
-        this(name, line, changeStation);
+    public Station(String name, MetroLine line,
+                   Station previousStation, Map<LineColor, String> changeStationNames) {
+        this(name, line, changeStationNames);
         this.previousStation = previousStation;
-        previousStation.setNextStation(this, prevTimeDuration);
     }
 
     public void setNextStation(Station nextStation, Duration timeDuration) {
@@ -70,19 +63,20 @@ public class Station {
         return "Station{"
                 + "name='" + name + '\''
                 + ", changeLines="
-                + ((changeLines != null) ? changeLines.values().toString() : "null")
+                + (changeStationNames.isEmpty() ? "null" : changeStationNames.keySet().toString())
                 + '}';
     }
 
     public boolean hasChangeByLine(MetroLine line) {
-        return changeLines != null && changeLines.containsKey(line.getColor());
+        return changeStationNames.containsKey(line.getColor());
     }
 
-    public String getNameChangeStation(MetroLine line) {
-        return changeLines.get(line.getColor());
-    }
-
-    public void buyOneWayTicket(LocalDate saleDate, Station startStation, Station endStation) {
+    public void buyOneWayTicket(LocalDate saleDate, String startStationName, String endStationName) {
+        Station startStation = line.getStation(startStationName).orElseThrow();
+        Station endStation = line.getStation(endStationName).orElseThrow();
+        if (startStation == endStation) {
+            throw new RuntimeException("станция назначения равна станции отправления");
+        }
         int countOfStation;
         Metro metro = line.getMetro();
         try {
@@ -90,28 +84,22 @@ public class Station {
         } catch (BadTrackException e) {
             throw new RuntimeException(e);
         }
-        BigDecimal price = new BigDecimal(countOfStation)
-                        .multiply(ONE_STAGE_PRICE)
-                        .add(BASE_TICKET_PRICE);
-        sale(saleDate, price);
+        ticketOffice.saleOneWayTicket(saleDate, countOfStation);
     }
 
     public void buyMonthTravelPass(LocalDate saleDate) {
-        sale(saleDate, PASS_PRICE);
+        Metro metro = line.getMetro();
+        metro.addMonthTravelPass(saleDate);
+        ticketOffice.saleMonthTravelPass(saleDate);
     }
 
-
-    public void sale(LocalDate saleDate, BigDecimal price) {
-        BigDecimal totalAmount = ticketOffice.getOrDefault(saleDate, BigDecimal.ZERO);
-        ticketOffice.put(saleDate, totalAmount.add(price));
+    public void renewTravelPass(String passNumber, LocalDate saleDate) {
+        Metro metro = line.getMetro();
+        metro.renewMonthTravelPass(passNumber, saleDate);
+        ticketOffice.renewTravelPass(saleDate);
     }
 
-    public LocalDate renewTravelPass(LocalDate saleDate) {
-        sale(saleDate, PASS_PRICE);
-        return saleDate.plusMonths(1);
-    }
-
-    public Map<LocalDate, BigDecimal> getTicketOffice() {
+    public TicketOffice getTicketOffice() {
         return ticketOffice;
     }
 }
