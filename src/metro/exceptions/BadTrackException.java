@@ -1,4 +1,4 @@
-package metro;
+package metro.exceptions;
 
 public class BadTrackException extends RuntimeException {
     public BadTrackException(String start, String end) {

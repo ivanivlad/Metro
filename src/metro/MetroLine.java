@@ -1,15 +1,13 @@
 package metro;
 
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class MetroLine {
     private final Metro metro;
     private final LineColor color;
-    private final LinkedHashMap<String, Station> stations = new LinkedHashMap<>();
+    private final Set<Station> stations = new LinkedHashSet<>();
 
     public MetroLine(Metro metro, LineColor colorLine) {
         this.metro = metro;
@@ -21,20 +19,20 @@ public class MetroLine {
     }
 
     public List<Station> getStations() {
-        return stations.values().stream().toList();
+        return stations.stream().toList();
     }
 
-    public void addFirstStation(String stationName, Map<LineColor, String> changeStation) {
+    public void addFirstStation(String stationName, Collection<Station> changeStation) {
         Station station = new Station(stationName, this, changeStation);
-        stations.put(stationName, station);
+        stations.add(station);
     }
 
     public void addLastStation(String stationName, Duration timeDuration,
                                Station previousStation,
-                               Map<LineColor, String> changeStation) {
+                               Collection<Station> changeStation) {
         Station station = new Station(stationName, this, previousStation, changeStation);
         previousStation.setNextStation(station, timeDuration);
-        stations.put(stationName, station);
+        stations.add(station);
     }
 
     @Override
@@ -43,7 +41,6 @@ public class MetroLine {
                 + "color='" + color + '\''
                 + ", stations=" + stations
                 + '}';
-
     }
 
     public Metro getMetro() {
@@ -51,7 +48,7 @@ public class MetroLine {
     }
 
     public Optional<Station> getStation(String stationName) {
-        return Optional.ofNullable(stations.get(stationName));
+        return stations.stream().filter(e -> e.getName().equals(stationName)).findFirst();
     }
 
     public Station getLastStation() {
@@ -59,9 +56,11 @@ public class MetroLine {
             throw new RuntimeException(
                     String.format("На линии '%s' отсутствут станции", this));
         }
-        return stations.values().stream()
+        return stations.stream()
                 .filter(e -> e.getNextStation() == null)
-                .findFirst().orElseThrow();
+                .findFirst().orElseThrow(() ->
+                        new RuntimeException(
+                            String.format("На линии %s не назначена последняя станция", this)));
     }
 
     public void checkFirstStationExists() {
@@ -72,13 +71,15 @@ public class MetroLine {
     }
 
     public Station findChangeStation(MetroLine endLine) {
-        return stations.values().stream()
-                .filter((e) -> e.hasChangeByLine(endLine))
+        List<Station> allChanges = endLine.getStations().stream()
+                .flatMap(e -> e.getChangeStations().stream())
+                .collect(Collectors.toList());
+        return stations.stream()
+                .filter(e -> e.hasStationToChange(allChanges))
                 .findFirst()
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                String.format("Между станциями %s и %s нет пересадок",
-                                        this,
-                                        endLine)));
+                .orElseThrow(() -> new RuntimeException(
+                    String.format("Между станциями %s и %s нет пересадок",
+                            this,
+                            endLine)));
     }
 }

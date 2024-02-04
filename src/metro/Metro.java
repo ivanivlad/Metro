@@ -1,14 +1,13 @@
 package metro;
 
+import metro.exceptions.BadTrackException;
+import metro.exceptions.StationNotExistsException;
+
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.TreeMap;
+import java.util.*;
 
 public class Metro {
     public static final int MAX_PASS_COUNT = 10000;
@@ -28,11 +27,11 @@ public class Metro {
     }
 
     public void addFirstStation(LineColor colorLine, String stationName) {
-        addFirstStation(colorLine, stationName, Map.of());
+        addFirstStation(colorLine, stationName, List.of());
     }
 
     public void addFirstStation(LineColor colorLine, String stationName,
-                                Map<LineColor, String> changeStation) {
+                                Collection<Station> changeStation) {
         MetroLine currentLine = getLineByColor(colorLine);
         checkStationExists(stationName);
         currentLine.checkFirstStationExists();
@@ -40,11 +39,11 @@ public class Metro {
     }
 
     public void addLastStation(LineColor colorLine, String stationName, Duration timeDuration) {
-        addLastStation(colorLine, stationName, timeDuration, Map.of());
+        addLastStation(colorLine, stationName, timeDuration, List.of());
     }
 
     public void addLastStation(LineColor colorLine, String stationName, Duration timeDuration,
-                               Map<LineColor, String> changeStation) {
+                               Collection<Station> changeStation) {
         MetroLine currentLine = getLineByColor(colorLine);
         Station previousStation = currentLine.getLastStation();
         checkStationExists(stationName);
@@ -81,8 +80,7 @@ public class Metro {
         boolean isStationExists = lines.stream()
                 .anyMatch(e -> e.getStation(stationName).isPresent());
         if (isStationExists) {
-            throw new RuntimeException(
-                    String.format("Станция с именем %s уже существует", stationName));
+            throw new StationNotExistsException(stationName);
         }
     }
 
@@ -97,10 +95,8 @@ public class Metro {
 
     public Station getStation(LineColor lineColor, String stationName) {
         MetroLine lineByColor = getLineByColor(lineColor);
-        return lineByColor.getStation(stationName).orElseThrow();
+        return lineByColor.getStation(stationName).orElseThrow(() -> new StationNotExistsException(stationName));
     }
-
-
 
     private int countOfStageDirect(Station startStation, Station endStation) {
         return countOfStage(startStation, endStation, true);
@@ -173,7 +169,7 @@ public class Metro {
 
     public void addMonthTravelPass(LocalDate dateSale) {
         String newSerialNumber = generateTravelPassNumber();
-        travelPass.put(newSerialNumber, dateSale);
+        travelPass.put(newSerialNumber, dateSale.plusMonths(1));
     }
 
     private String generateTravelPassNumber() {
@@ -190,7 +186,7 @@ public class Metro {
         travelPass.put(passNumber, newDateSale);
     }
 
-    public boolean checkPassValidity(String passNumber) {
+    public boolean isPassValidity(String passNumber) {
         checkPassExists(passNumber);
         LocalDate dateOfExpire = travelPass.get(passNumber);
         return dateOfExpire.compareTo(LocalDate.now()) > 0;

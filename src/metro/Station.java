@@ -1,33 +1,36 @@
 package metro;
 
+import metro.exceptions.BadTrackException;
+import metro.exceptions.StationNotExistsException;
+
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class Station {
     private final String name;
     private final MetroLine line;
+    private final Metro metro;
     private Station nextStation;
     private Station previousStation;
     private Duration timeDuration;
-
-    private final HashMap<LineColor, String> changeStationNames = new HashMap<>();
+    private final Set<Station> changeStation = new HashSet<>();
     private final TicketOffice ticketOffice = new TicketOffice();
 
     public Station(String name, MetroLine line) {
         this.name = name;
         this.line = line;
+        this.metro = line.getMetro();
     }
 
-    public Station(String name, MetroLine line, Map<LineColor, String> changeStationNames) {
+    public Station(String name, MetroLine line, Collection<Station> changeStation) {
         this(name, line);
-        this.changeStationNames.putAll(changeStationNames);
+        this.changeStation.addAll(changeStation);
     }
 
     public Station(String name, MetroLine line,
-                   Station previousStation, Map<LineColor, String> changeStationNames) {
-        this(name, line, changeStationNames);
+                   Station previousStation, Collection<Station> changeStation) {
+        this(name, line, changeStation);
         this.previousStation = previousStation;
     }
 
@@ -60,25 +63,25 @@ public class Station {
 
     @Override
     public String toString() {
+        String changeLines = changeStation.stream()
+                    .map(e -> e.getLine().getColor().toString())
+                    .reduce((f, s) -> f + ", " + s)
+                    .orElse("null");
         return "Station{"
                 + "name='" + name + '\''
-                + ", changeLines="
-                + (changeStationNames.isEmpty() ? "null" : changeStationNames.keySet().toString())
+                + ", changeLines=" + changeLines
                 + '}';
     }
 
-    public boolean hasChangeByLine(MetroLine line) {
-        return changeStationNames.containsKey(line.getColor());
-    }
-
     public void buyOneWayTicket(LocalDate saleDate, String startStationName, String endStationName) {
-        Station startStation = line.getStation(startStationName).orElseThrow();
-        Station endStation = line.getStation(endStationName).orElseThrow();
+        Station startStation = line.getStation(startStationName)
+                .orElseThrow(() -> new StationNotExistsException(startStationName));
+        Station endStation = line.getStation(endStationName)
+                .orElseThrow(() -> new StationNotExistsException(endStationName));
         if (startStation == endStation) {
             throw new RuntimeException("станция назначения равна станции отправления");
         }
         int countOfStation;
-        Metro metro = line.getMetro();
         try {
             countOfStation = metro.countOfStationBetween(startStation, endStation);
         } catch (BadTrackException e) {
@@ -88,18 +91,28 @@ public class Station {
     }
 
     public void buyMonthTravelPass(LocalDate saleDate) {
-        Metro metro = line.getMetro();
         metro.addMonthTravelPass(saleDate);
         ticketOffice.saleMonthTravelPass(saleDate);
     }
 
     public void renewTravelPass(String passNumber, LocalDate saleDate) {
-        Metro metro = line.getMetro();
         metro.renewMonthTravelPass(passNumber, saleDate);
         ticketOffice.renewTravelPass(saleDate);
     }
 
     public TicketOffice getTicketOffice() {
         return ticketOffice;
+    }
+
+    public void addChangeStation(Station station) {
+        changeStation.add(station);
+    }
+
+    public boolean hasStationToChange(Collection<Station> stations) {
+        return changeStation.stream().anyMatch(stations::contains);
+    }
+
+    public Set<Station> getChangeStations() {
+        return changeStation;
     }
 }
