@@ -202,10 +202,11 @@ public class Metro {
         TreeMap<LocalDate, BigDecimal> totalIncome = new TreeMap<>();
 
         lines.stream().flatMap(metroLine -> metroLine.getStations().stream())
-                    .forEach(station -> station.getTicketOffice()
+                    .flatMap(station -> station.getTicketOffice()
                             .getAllSales()
-                            .forEach((key, value) -> totalIncome.compute(key, (k, v) ->
-                                        v == null ? value : v.add(value))));
+                            .entrySet().stream())
+                    .forEach(entry -> totalIncome.compute(entry.getKey(), (k, v) ->
+                                        v == null ? entry.getValue() : v.add(entry.getValue())));
         DateTimeFormatter pattern = DateTimeFormatter.ofPattern("dd.MM.yyyy");
         totalIncome.forEach((key, value) ->
                 System.out.printf("%s - %s\n", key.format(pattern), value));
